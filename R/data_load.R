@@ -3,67 +3,24 @@
 # Run this script first before moving on to analyses
 ###_____________________________________________________________________________
 
+# Get environment variables into the global environment
+aed_data_path <- Sys.getenv("aed_env")
+ems_data_path <- Sys.getenv("ems_data_env")
+iowa_county_district_path <- Sys.getenv("iowa_county_district_env")
+
 ###_____________________________________________________________________________
 # read in the data
 ###_____________________________________________________________________________
 
 # raw EMS data for comparison
 ems_raw <- readr::read_csv(
-  "AED Project Data_Export.csv",
-  col_types = list(
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_guess(),
-    readr::col_guess(),
-    readr::col_number(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_guess(),
-    readr::col_guess(),
-    readr::col_number(),
-    readr::col_guess(),
-    readr::col_number(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_logical(),
-    readr::col_character(),
-    readr::col_factor(),
-    readr::col_character(),
-    readr::col_factor(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_guess(),
-    readr::col_number(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character(),
-    readr::col_character()
-  )
+  ems_data_path
 ) |>
   janitor::clean_names(case = "title", sep_out = "_")
 
-
 # clean the EMS data for comparison
 
-ems_clean <- ems_raw |>
+ems_aed <- ems_raw |>
   dplyr::mutate(
     Incident_Date = lubridate::mdy(stringr::str_remove(
       Incident_Date,
@@ -102,17 +59,11 @@ ems_clean <- ems_raw |>
     .before = 1
   )
 
-# get EMS rows that were a cardiac arrest found by EMS and AED was used
-
-ems_aed <- ems_clean |>
-  dplyr::filter(Scene_First_Ems_Unit_on_Scene_e_Scene_01 == "Yes")
-
 ###_____________________________________________________________________________
 # Analyze EMS data
 ###_____________________________________________________________________________
 
 # get all unique procedures, examine
-
 all_procedures <- ems_aed |>
   dplyr::select(Procedure_Performed_Description_e_Procedures_03) |>
   dplyr::distinct() |>
@@ -156,13 +107,11 @@ ems_shocks <- ems_aed_defib |>
   dplyr::select(Unique_Run_ID, Shocks)
 
 # read in location data for regions / urbanicity
-
 location <- readr::read_csv(
   file = "C:/Users/nfoss/Desktop/Analytics/Analytics Builds/GitHub/Reference-Files/IA Counties, Regions.csv"
 )
 
 # deal with multiple procedures to reduce the rows to 1 row = 1 run, no duplication
-
 ems_aed_runs <- ems_aed |>
   dplyr::mutate(
     Incident_Day = wday(Incident_Date, label = T, abbr = F),
@@ -346,12 +295,11 @@ readr::write_csv(x = ems_aed_runs, file = "ems_aed_runs.csv")
 ###_____________________________________________________________________________
 
 # raw AED data
-
 aed_raw <-
   readr::read_csv(
-    "C:/Users/nfoss/OneDrive - State of Iowa HHS/Analytics/BEMTS/AED USAGE/report/2021_2023/data/AED Usage - VALID DATA ENTRY.csv",
+    aed_data_path,
     col_types = list(
-      readr::col_date(format = "%m/%d/%Y"),
+      readr::col_date(format = "%Y-%m-%d"),
       #1
       readr::col_time(),
       #2
@@ -430,9 +378,7 @@ aed_raw <-
   ) |>
   janitor::clean_names(case = "all_caps")
 
-
 # read in Iowa county and region data
-
 counties_regions <-
   readr::read_csv(
     "C:/Users/nfoss/Desktop/Analytics/Analytics Builds/GitHub/Reference-Files/IA Counties, Regions.csv"
@@ -550,22 +496,6 @@ geonames_county <-
 
 geonames_admin2_iowa <- geonames_county |>
   dplyr::filter(country_code == "US", state_code == "IA")
-
-###_____________________________________________________________________________
-# load in Iowa county FIPS codes from the Census Bureau
-# this gives the accurate name of all counties in the US state of Iowa
-# use for sanity check with the geonames database for reference
-###_____________________________________________________________________________
-
-iowa_county_FIPS <-
-  readr::read_delim(
-    file = "https://www2.census.gov/geo/docs/reference/codes2020/cou/st19_ia_cou2020.txt"
-  ) |>
-  dplyr::mutate(
-    COUNTYNAME = stringr::str_squish(COUNTYNAME),
-    COUNTYNAME = stringr::str_remove(COUNTYNAME, "\\sCounty")
-  ) |>
-  dplyr::select(COUNTYFP, COUNTYNAME)
 
 ###_____________________________________________________________________________
 # join the county names / codes from geonames to the city data from geonames as their codes are unique
