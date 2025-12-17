@@ -102,19 +102,18 @@ ems_aed_defib <- ems_aed |>
   dplyr::distinct()
 
 # just get the shocks as a separate object for the join
-
 ems_shocks <- ems_aed_defib |>
   dplyr::select(Unique_Run_ID, Shocks)
 
 # read in location data for regions / urbanicity
 location <- readr::read_csv(
-  file = "C:/Users/nfoss/Desktop/Analytics/Analytics Builds/GitHub/Reference-Files/IA Counties, Regions.csv"
+  file = iowa_county_district_path
 )
 
 # deal with multiple procedures to reduce the rows to 1 row = 1 run, no duplication
 ems_aed_runs <- ems_aed |>
   dplyr::mutate(
-    Incident_Day = wday(Incident_Date, label = T, abbr = F),
+    Incident_Day = lubridate::wday(Incident_Date, label = T, abbr = F),
     Weekday_Weekend = traumar::weekend(Incident_Date),
     Season = traumar::season(Incident_Date),
     .after = Incident_Date_Time
@@ -154,7 +153,7 @@ ems_aed_runs <- ems_aed |>
     )
   ) |>
   dplyr::mutate(
-    Cardiac_Arrest_Cpr_Provided_Prior_to_Ems_Arrival_3_4_e_Arrest_05_3_5_it_Arrest_105 = if_else(
+    Cardiac_Arrest_Cpr_Provided_Prior_to_Ems_Arrival_3_4_e_Arrest_05_3_5_it_Arrest_105 = dplyr::if_else(
       is.na(
         Cardiac_Arrest_Cpr_Provided_Prior_to_Ems_Arrival_3_4_e_Arrest_05_3_5_it_Arrest_105
       ) &
@@ -189,7 +188,7 @@ ems_aed_runs <- ems_aed |>
         Incident_Dispatch_Notified_to_Unit_Arrived_at_Patient_in_Minutes,
         Incident_Dispatch_Notified_to_Unit_Arrived_on_Scene_in_Minutes
       ),
-      ~ impute(., focus = "missing", method = "median")
+      ~ traumar::impute(., focus = "missing", method = "median")
     ),
     dplyr::across(
       c(
@@ -205,7 +204,7 @@ ems_aed_runs <- ems_aed |>
     )
   ) |>
   dplyr::mutate(
-    Cardiac_Arrest_Patient_Outcome_at_End_of_Ems_Event_e_Arrest_18 = if_else(
+    Cardiac_Arrest_Patient_Outcome_at_End_of_Ems_Event_e_Arrest_18 = dplyr::if_else(
       is.na(
         Cardiac_Arrest_Patient_Outcome_at_End_of_Ems_Event_e_Arrest_18
       ) |
@@ -283,12 +282,6 @@ ems_aed_runs <- ems_aed |>
     location,
     by = c("Scene_Incident_County_Name_e_Scene_21" = "County")
   )
-
-###_____________________________________________________________________________
-# export the EMS cardiac arrest event data to .csv for analyses in Tableau
-###_____________________________________________________________________________
-
-readr::write_csv(x = ems_aed_runs, file = "ems_aed_runs.csv")
 
 ###_____________________________________________________________________________
 # continue reading in data, AED analyses, manipulations
@@ -385,7 +378,6 @@ counties_regions <-
   )
 
 # read in the zipcode data to get Iowa town names
-
 zipcodeR::download_zip_data()
 
 zipcodes <- zipcodeR::search_state("IA") |>
