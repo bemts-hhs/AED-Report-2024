@@ -19,14 +19,13 @@ ems_raw <- readr::read_csv(
   janitor::clean_names(case = "title", sep_out = "_")
 
 # clean the EMS data for comparison
-
 ems_aed <- ems_raw |>
   dplyr::mutate(
     Incident_Date = lubridate::mdy(stringr::str_remove(
       Incident_Date,
       pattern = "12:00:00 AM"
     )),
-    across(
+    dplyr::across(
       matches("date_time"),
       ~ lubridate::mdy_hms(stringr::str_remove(., pattern = "\\sAM|\\sPM"))
     ),
@@ -77,7 +76,7 @@ all_procedures <- ems_aed |>
 
 ems_aed_defib <- ems_aed |>
   dplyr::select(
-    Unique_Run_ID,
+    Fact_Incident_Pk,
     Procedure_Performed_Description_e_Procedures_03,
     Procedure_Performed_Date_Time_e_Procedures_01,
     Procedure_Number_of_Attempts_e_Procedures_05
@@ -91,7 +90,7 @@ ems_aed_defib <- ems_aed |>
   ) |>
   dplyr::distinct() |>
   tidyr::replace_na(list(Procedure_Number_of_Attempts_e_Procedures_05 = 1)) |>
-  dplyr::group_by(Unique_Run_ID) |>
+  dplyr::group_by(Fact_Incident_Pk) |>
   dplyr::mutate(
     Shocks = sum(Procedure_Number_of_Attempts_e_Procedures_05, na.rm = T),
     across(
@@ -103,7 +102,7 @@ ems_aed_defib <- ems_aed |>
 
 # just get the shocks as a separate object for the join
 ems_shocks <- ems_aed_defib |>
-  dplyr::select(Unique_Run_ID, Shocks)
+  dplyr::select(Fact_Incident_Pk, Shocks)
 
 # read in location data for regions / urbanicity
 location <- readr::read_csv(
@@ -118,8 +117,8 @@ ems_aed_runs <- ems_aed |>
     Season = traumar::season(Incident_Date),
     .after = Incident_Date_Time
   ) |>
-  dplyr::group_by(Unique_Run_ID) |>
-  dplyr::mutate(across(
+  dplyr::group_by(Fact_Incident_Pk) |>
+  dplyr::mutate(dplyr::across(
     c(
       Incident_Complaint_Reported_by_Dispatch_Dispatch_Reason_e_Dispatch_01,
       Situation_Provider_Primary_Impression_Description_Only_e_Situation_11,
@@ -175,12 +174,12 @@ ems_aed_runs <- ems_aed |>
     .after = Cardiac_Arrest_Cpr_Provided_Prior_to_Ems_Arrival_3_4_e_Arrest_05_3_5_it_Arrest_105
   ) |>
   dplyr::ungroup() |>
-  dplyr::full_join(ems_shocks, by = "Unique_Run_ID") |>
+  dplyr::full_join(ems_shocks, by = dplyr::join_by(Fact_Incident_Pk)) |>
   dplyr::relocate(
     Shocks,
     .after = Procedure_Number_of_Attempts_e_Procedures_05
   ) |>
-  dplyr::distinct(Unique_Run_ID, .keep_all = T) |>
+  dplyr::distinct(Fact_Incident_Pk, .keep_all = T) |>
   tidyr::replace_na(list(Situation_Possible_Overdose = FALSE)) |>
   dplyr::mutate(
     dplyr::across(
