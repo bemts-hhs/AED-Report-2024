@@ -106,8 +106,8 @@ ems_shocks <- ems_aed_defib |>
   dplyr::select(Fact_Incident_Pk, Shocks)
 
 # read in location data for regions / urbanicity
-location <- readr::read_csv(
-  file = iowa_county_district_path
+location <- readxl::read_excel(
+  iowa_county_district_path
 )
 
 # deal with multiple procedures to reduce the rows to 1 row = 1 run, no duplication
@@ -282,6 +282,15 @@ ems_aed_runs <- ems_aed |>
     location,
     by = c("Scene_Incident_County_Name_e_Scene_21" = "County")
   )
+
+###_____________________________________________________________________________
+# export the EMS cardiac arrest event data to .csv for analyses in Tableau
+###_____________________________________________________________________________
+
+readr::write_csv(
+  x = ems_aed_runs,
+  file = file.path(output_folder, "ems_aed_runs.csv")
+)
 
 ###_____________________________________________________________________________
 # continue reading in data, AED analyses, manipulations
