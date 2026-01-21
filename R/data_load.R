@@ -7,6 +7,7 @@
 aed_data_path <- Sys.getenv("aed_env")
 ems_data_path <- Sys.getenv("ems_data_env")
 iowa_county_district_path <- Sys.getenv("iowa_county_district_env")
+output_folder <- Sys.getenv("output_directory")
 
 ###_____________________________________________________________________________
 # read in the data
@@ -372,15 +373,21 @@ aed_raw <-
 
 # read in Iowa county and region data
 counties_regions <-
-  readr::read_csv(
-    "C:/Users/nfoss/Desktop/Analytics/Analytics Builds/GitHub/Reference-Files/IA Counties, Regions.csv"
+  readxl::read_excel(
+    iowa_county_district_path
   )
 
 # read in the zipcode data to get Iowa town names
 zipcodeR::download_zip_data()
 
-zipcodes <- zipcodeR::search_state("IA") |>
-  tidyr::unnest(common_city_list)
+# get the zipcodes into memory
+zip_code_db <- zipcodeR::zip_code_db
+
+zipcodes <- zipcodeR::search_state("IA")
+
+# remove intermediate object
+rm(zip_code_db)
+gc()
 
 # unzip the larger US data from Geonames
 
@@ -583,8 +590,7 @@ missing_location_data <- tibble::tibble(
   elevation = rep(NA, 7),
   dem = rep(NA, 7),
   timezone = rep(NA_character_, 7),
-  modification_date = rep(NA_Date_, 7),
-  # Change to NA_Date_
+  modification_date = rep(NA, 7),
   `Region: Preparedness` = c("7", "3", "2", "3", "7", "4", "1A"),
   # Adding region information
   asciiname = rep(NA_character_, 7),
@@ -611,6 +617,20 @@ Iowa_Data_Final <- dplyr::bind_rows(Iowa_Data_Final, missing_location_data)
 ###_____________________________________________________________________________
 # Exploratory data analysis indicates need for manipulation of some of the fields
 ###_____________________________________________________________________________
+
+# Explore the observed distribution of the TIME_FROM_CALL_TO_PATIENT column
+aed_raw |>
+  dplyr::mutate(
+    Year = lubridate::year(DATE_OF_USE),
+    TIME_FROM_CALL_TO_PATIENT = abs(TIME_FROM_CALL_TO_PATIENT)
+  ) |>
+  dplyr::filter(Year >= 2022, TIME_FROM_CALL_TO_PATIENT < 100) |>
+  traumar::is_it_normal(
+    TIME_FROM_CALL_TO_PATIENT,
+    group_vars = "Year",
+    normality_test = "ad",
+    include_plots = T
+  )
 
 # there are some negative times that do not make sense in aed_raw$`Time from call to patient`
 # find those cases and try to fix
@@ -660,7 +680,7 @@ aed_clean <- aed_raw |>
     AMB_PAT = dplyr::if_else(
       lubridate::hour(AMB_TOC) == 23 &
         lubridate::hour(AMB_PAT) == 0,
-      AMB_PAT + days(1),
+      AMB_PAT + lubridate::days(1),
       AMB_PAT
     ),
     # fix some of the dates on the time to patient data so the math is right
@@ -700,7 +720,7 @@ aed_clean <- aed_raw |>
       AMB_TOC,
       units = "mins"
     )),
-    UNKNOWN_IF_WITNESSED = if_else(
+    UNKNOWN_IF_WITNESSED = dplyr::if_else(
       is.na(UNKNOWN_IF_WITNESSED),
       TRUE,
       UNKNOWN_IF_WITNESSED
@@ -858,7 +878,10 @@ times_out_of_bounds <- aed_clean |>
 problem_agencies <- aed_clean |>
   dplyr::filter(AGENCY_TYPE == "Unknown")
 
-readr::write_csv(x = problem_agencies, file = "problem_agencies.csv")
+readr::write_csv(
+  x = problem_agencies,
+  file = file.path(output_folder, "problem_agencies.csv")
+)
 
 ###_____________________________________________________________________________
 # attempt a deterministic match between aed_clean and geonames location data
@@ -1044,9 +1067,39 @@ aed_final |>
 # Deal with outliers
 ###_____________________________________________________________________________
 
-# use custom function impute() to address outliers
+# create a tidymodels workflow to utilize KNN imputation
 
-aed_final_impute <- aed_final |>
+# use tidymodels to create a recipe to handle missing values and outliers
+# create a recipe for imputing and outlier handling ----
+aed_recipe <- recipes::recipe(~., data = aed_final) |>
+  recipes::step_zv(recipes::all_predictors()) |>
+  recipes::step_nzv(recipes::all_predictors()) |>
+  recipes::step_impute_knn(
+    TIME_FROM_CALL_TO_PATIENT:TIME_FROM_CALL_TO_END_AED,
+    neighbors = 5
+  ) # KNN imputation
+
+# prep and bake the recipe ----
+aed_data_processed <- withr::with_seed(
+  10232015, # ensures reproducible KNN imputation
+  aed_recipe |>
+    recipes::prep() |>
+    recipes::bake(new_data = NULL) |>
+    dplyr::mutate(
+      dplyr::across(
+        TIME_FROM_CALL_TO_PATIENT:TIME_FROM_CALL_TO_END_AED,
+        ~ traumar::impute(
+          x = .,
+          focus = "skew",
+          method = "winsorize",
+          percentile = 0.95
+        )
+      )
+    )
+)
+
+# use custom function impute() to address outliers
+aed_final_impute <- aed_data_processed |>
   dplyr::mutate(
     Season = traumar::season(DATE_OF_USE),
     Day_Name = lubridate::wday(DATE_OF_USE, label = T),
@@ -1057,45 +1110,6 @@ aed_final_impute <- aed_final |>
     SURVIVAL = dplyr::case_when(
       is.na(SURVIVAL) ~ RESULT_PATIENT_EXPIRED,
       TRUE ~ SURVIVAL
-    )
-  ) |>
-  dplyr::mutate(
-    dplyr::across(
-      TIME_FROM_CALL_TO_AED_ON:TIME_FROM_CALL_TO_END_AED,
-      ~ traumar::impute(
-        x = .,
-        focus = "skew",
-        method = "winsorize",
-        percentile = 0.95
-      )
-    ),
-    dplyr::across(
-      TIME_FROM_CALL_TO_PATIENT:TIME_FROM_CALL_TO_END_AED,
-      ~ traumar::impute(x = ., focus = "missing", method = "median")
-    ),
-    TIME_FROM_CALL_TO_AED_ON_RANGE = dplyr::case_when(
-      TIME_FROM_CALL_TO_AED_ON >= 0 &
-        TIME_FROM_CALL_TO_AED_ON < 11 ~ "0 - 10 mins",
-      TIME_FROM_CALL_TO_AED_ON >= 11 &
-        TIME_FROM_CALL_TO_AED_ON < 21 ~ "11 - 20 mins",
-      TIME_FROM_CALL_TO_AED_ON >= 21 &
-        TIME_FROM_CALL_TO_AED_ON < 31 ~ "21 - 30 mins",
-      TIME_FROM_CALL_TO_AED_ON >= 31 ~ "31+ mins",
-      TRUE ~ "Unknown"
-    ),
-    TIME_FROM_CALL_TO_PATIENT_RANGE = dplyr::case_when(
-      TIME_FROM_CALL_TO_PATIENT >= 0 &
-        TIME_FROM_CALL_TO_PATIENT < 11 ~ "0 - 10 mins",
-      TIME_FROM_CALL_TO_PATIENT >= 11 &
-        TIME_FROM_CALL_TO_PATIENT < 21 ~ "11 - 20 mins",
-      TIME_FROM_CALL_TO_PATIENT >= 21 &
-        TIME_FROM_CALL_TO_PATIENT < 31 ~ "21 - 30 mins",
-      TIME_FROM_CALL_TO_PATIENT >= 31 &
-        TIME_FROM_CALL_TO_PATIENT < 41 ~ "31 - 40 mins",
-      TIME_FROM_CALL_TO_PATIENT >= 41 &
-        TIME_FROM_CALL_TO_PATIENT < 51 ~ "41 - 50 mins",
-      TIME_FROM_CALL_TO_PATIENT >= 51 ~ "51+ mins",
-      TRUE ~ "Unknown"
     )
   ) |>
   dplyr::mutate(
@@ -1141,7 +1155,6 @@ aed_final_impute |>
   traumar::is_it_normal(data_name = "AED Data", x = TIME_FROM_CALL_TO_END_AED) # IQR likely the best treatment method for outliers
 
 # check for missingness
-
 missing_location <- aed_final_impute |>
   dplyr::filter(dplyr::if_any(
     LOCATION_CITY_EVENT:`Region: Preparedness`,
@@ -1158,22 +1171,24 @@ explore <- aed_final_impute |>
 ###_____________________________________________________________________________
 # Export the final file to .csv for analyses in Tableau
 ###_____________________________________________________________________________
-
 readr::write_csv(
   x = aed_final_impute,
-  file = stringr::str_c(
+  file = file.path(
+    output_folder,
     stringr::str_c(
-      "aed",
-      "final",
-      lubridate::year(Sys.time()),
-      lubridate::month(Sys.time()),
-      lubridate::day(Sys.time()),
-      lubridate::hour(Sys.time()),
-      lubridate::minute(Sys.time()),
-      round(lubridate::second(Sys.time())),
-      sep = "_"
-    ),
-    ".csv"
+      stringr::str_c(
+        "aed",
+        "final",
+        lubridate::year(Sys.time()),
+        lubridate::month(Sys.time()),
+        lubridate::day(Sys.time()),
+        lubridate::hour(Sys.time()),
+        lubridate::minute(Sys.time()),
+        round(lubridate::second(Sys.time())),
+        sep = "_"
+      ),
+      ".csv"
+    )
   )
 )
 
