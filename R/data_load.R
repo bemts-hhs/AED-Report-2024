@@ -49,14 +49,8 @@ ems_aed <- ems_raw |>
       pattern = "\""
     )
   ) |>
-  dplyr::mutate(
-    Unique_Run_ID = stringr::str_c(
-      Agency_Name_d_Agency_03,
-      Incident_Patient_Care_Report_Number_Pcr_e_Record_01,
-      Incident_Date,
-      sep = "-"
-    ),
-    .before = 1
+  dplyr::filter(
+    nchar(Agency_Number_d_Agency_02) == 7
   )
 
 ###_____________________________________________________________________________
@@ -73,7 +67,8 @@ all_procedures <- ems_aed |>
 # select only procedure, date/time, and # attempts
 # get the unique run IDs with defib using filter
 # get the dplyr::distinct rows which will be unique run ID, procedure, date/time, and # of shocks, so you have each row as a dplyr::distinct procedure with date/time and # shocks
-# take the sum of the procedures per Run ID which gives you # of shocks total over all defib procedures
+# take the sum of the procedures per Run ID which gives you # of shocks total
+# over all defib procedures
 
 ems_aed_defib <- ems_aed |>
   dplyr::select(
@@ -84,20 +79,22 @@ ems_aed_defib <- ems_aed |>
   ) |>
   dplyr::filter(
     grepl(
-      pattern = "Automatic external cardiac defibrillator (physical object)|CV - Automated External Defibrillator|Automatic cardiac defibrillator (physical object)|CV - Defibrillation - Manual|Defibrillation, AED|Electrical cardioversion (& defibrillation)|CV - Cardioversion|Cardiac resuscitation",
+      pattern = "Automatic external cardiac defibrillator (physical object)|CV - Automated External Defibrillator|Automatic cardiac defibrillator (physical object)|CV - Defibrillation - Manual|Defibrillation, AED|Electrical cardioversion (& defibrillation)|CV - Cardioversion|Cardiac resuscitation|Management of external defibrillation",
       x = Procedure_Performed_Description_e_Procedures_03,
       ignore.case = T
     )
   ) |>
   dplyr::distinct() |>
-  tidyr::replace_na(list(Procedure_Number_of_Attempts_e_Procedures_05 = 1)) |>
-  dplyr::group_by(Fact_Incident_Pk) |>
+  tidyr::replace_na(
+    list(Procedure_Number_of_Attempts_e_Procedures_05 = 1)
+  ) |>
   dplyr::mutate(
     Shocks = sum(Procedure_Number_of_Attempts_e_Procedures_05, na.rm = T),
     across(
       Procedure_Performed_Description_e_Procedures_03:Procedure_Number_of_Attempts_e_Procedures_05,
       ~ stringr::str_c(., collapse = ", ")
-    )
+    ), 
+    .by = Fact_Incident_Pk
   ) |>
   dplyr::distinct()
 
