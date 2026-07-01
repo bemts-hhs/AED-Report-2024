@@ -82,3 +82,6 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Output folder
+/output

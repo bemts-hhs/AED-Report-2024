@@ -1,0 +1,12 @@
+[deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+DotEnv = "4dc1fcf4-5e3b-5448-94ab-0c38ec0385c1"
+PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
+Quarto = "d7167be5-f61b-4dc9-b75c-ab62374668c5"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Tidier = "f0413319-3358-4bb0-8e7c-0c83523a93bd"
+TidierDates = "20186a3f-b5d3-468e-823e-77aae96fe2d8"
+TidierPlots = "337ecbd1-5042-4e2a-ae6f-ca776f97570a"
+XLSX = "fdbf4ff8-1666-58a4-91e7-1b58723a45e0"

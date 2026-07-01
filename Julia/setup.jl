@@ -2,6 +2,8 @@
 # Package setup and documentation
 # _____________________________________________________________________________
 
+using Pkg
+
 # Ensure required packages are available
 Pkg.activate(".");
 Pkg.instantiate();
@@ -57,7 +59,7 @@ output_directory=
 end;
 
 # Load .env file into ENV[]
-DotEnv.load!();
+DotEnv.config();
 
 # _____________________________________________________________________________
 # generate_random_id(): creates random identifiers analogous to the R function
