@@ -56,11 +56,13 @@ iowa_county_district_env=
 output_directory=
 """,
 	)
+else
+	@info "File `.env` was found in the target directory."
 end;
 
 # Load .env file into ENV[]
 DotEnv.config();
-
+DotEnv.load!()
 # _____________________________________________________________________________
 # generate_random_id(): creates random identifiers analogous to the R function
 # _____________________________________________________________________________
