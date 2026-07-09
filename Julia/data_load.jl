@@ -29,7 +29,7 @@ ems_aed = @chain ems_raw begin
     @mutate(incident_date = TidierDates.mdy(
         TidierStrings.str_remove_all.(incident_date, "12:00:00 AM")
         ),
-        across(matches("date_time"), str -> TidierStrings.str_remove.(str, r"\s(a|p)m"i)
+        across(matches("date_time"), str -> TidierStrings.str_remove.(str, r"\\s(a|p)m"i)
         )#,
   #       incident_dispatch_notified_to_unit_arrived_on_scene_in_minutes = TidierDates.difftime.(
   #       `incident_unit_arrived_on_scene_date_time_(e_times_06)`,

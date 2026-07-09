@@ -5,25 +5,25 @@
 using Pkg
 
 # Ensure required packages are available
-Pkg.activate(".");
-Pkg.instantiate();
+# Pkg.activate(".");
+# Pkg.instantiate();
 
 # only need to install packages the first time
-Pkg.add(
-    [
-    "Tidier", 
-    "TidierPlots", 
-    "TidierDates", 
-    "Dates", 
-    "DotEnv", 
-    "CSV", 
-    "XLSX", 
-    "DataFrames", 
-    "Quarto", 
-    "PrettyTables",
-    "Random"
-    ]
-);
+# Pkg.add(
+#     [
+#     "Tidier", 
+#     "TidierPlots", 
+#     "TidierDates", 
+#     "Dates", 
+#     "DotEnv", 
+#     "CSV", 
+#     "XLSX", 
+#     "DataFrames", 
+#     "Quarto", 
+#     "PrettyTables",
+#     "Random"
+#     ]
+# );
 
 # Load packages
 using Tidier
@@ -63,6 +63,7 @@ end;
 # Load .env file into ENV[]
 DotEnv.config();
 DotEnv.load!()
+
 # _____________________________________________________________________________
 # generate_random_id(): creates random identifiers analogous to the R function
 # _____________________________________________________________________________
